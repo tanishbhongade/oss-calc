@@ -1,5 +1,18 @@
 import tkinter as tk
 
+from sympy import sympify, simplify, zoo, lambdify
+from pint import UnitRegistry
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ============================================================
+# PINT UNIT REGISTRY
+# ============================================================
+
+ureg = UnitRegistry()
+
+
 # ============================================================
 # TRANSLATIONS
 # ============================================================
@@ -12,6 +25,11 @@ LANGUAGES = {
         "translate": "मराठी",
         "invalid": "Invalid Expression",
         "zero": "Cannot Divide by Zero",
+        "simplify": "Simplify",
+        "convert": "Convert",
+        "unit_converter": "Unit Converter",
+        "unit_invalid": "Invalid Unit Conversion",
+        "plot": "Plot",
     },
     "Marathi": {
         "title": "गणक",
@@ -20,6 +38,11 @@ LANGUAGES = {
         "translate": "English",
         "invalid": "अवैध उदाहरण",
         "zero": "शून्याने भागाकार करता येत नाही",
+        "simplify": "सोपे करा",
+        "convert": "रूपांतर करा",
+        "unit_converter": "एकक रूपांतरक",
+        "unit_invalid": "अवैध एकक रूपांतरण",
+        "plot": "आलेख",
     },
 }
 
@@ -37,7 +60,7 @@ MARATHI_TO_ENGLISH = str.maketrans("०१२३४५६७८९", "0123456789
 
 root = tk.Tk()
 root.title("Calculator")
-root.geometry("360x520")
+root.geometry("400x900")
 root.resizable(False, False)
 
 current_language = "English"
@@ -59,11 +82,10 @@ display.pack(fill="both", padx=10, pady=10, ipady=10)
 
 def click(value):
     """
-    Add a number/operator to the display.
+    Add a number, operator, or scientific function
+    to the display.
     """
 
-    # Convert English digits to Marathi digits
-    # when Marathi mode is active.
     if current_language == "Marathi":
         value = value.translate(ENGLISH_TO_MARATHI)
 
@@ -74,6 +96,7 @@ def clear():
     """
     Clear calculator display.
     """
+
     display.delete(0, tk.END)
 
 
@@ -81,6 +104,7 @@ def backspace():
     """
     Delete the last character.
     """
+
     value = display.get()
 
     display.delete(0, tk.END)
@@ -89,33 +113,29 @@ def backspace():
 
 def calculate():
     """
-    Calculate the expression.
+    Calculate the expression using SymPy.
     """
 
     try:
         expression = display.get()
 
-        # Convert Marathi digits to English digits
-        # before performing calculation.
+        # Convert Marathi digits to English digits.
         expression = expression.translate(MARATHI_TO_ENGLISH)
 
-        # Only allow calculator characters.
-        allowed = "0123456789+-*/.() "
+        # Evaluate expression using SymPy.
+        result = sympify(expression)
 
-        if not all(char in allowed for char in expression):
-            raise ValueError
+        # Check for division by zero.
+        if result.has(zoo):
+            raise ZeroDivisionError
 
-        # Calculate expression
-        result = eval(expression, {"__builtins__": None}, {})
-
-        # Remove unnecessary .0
-        if isinstance(result, float) and result.is_integer():
+        # Remove unnecessary formatting for integers.
+        if getattr(result, "is_Integer", False):
             result = int(result)
 
         result = str(result)
 
-        # Convert result to Marathi digits
-        # if Marathi mode is active.
+        # Convert result to Marathi digits.
         if current_language == "Marathi":
             result = result.translate(ENGLISH_TO_MARATHI)
 
@@ -133,13 +153,99 @@ def calculate():
         display.insert(0, LANGUAGES[current_language]["invalid"])
 
 
+def simplify_expression():
+    """
+    Simplify a mathematical expression using SymPy.
+    """
+
+    try:
+        expression = display.get()
+
+        expression = expression.translate(MARATHI_TO_ENGLISH)
+
+        result = simplify(sympify(expression))
+
+        result = str(result)
+
+        if current_language == "Marathi":
+            result = result.translate(ENGLISH_TO_MARATHI)
+
+        display.delete(0, tk.END)
+        display.insert(0, result)
+
+    except Exception:
+
+        display.delete(0, tk.END)
+        display.insert(0, LANGUAGES[current_language]["invalid"])
+
+
 # ============================================================
-# BUTTON FRAME
+# PLOT FUNCTION
+# ============================================================
+
+
+def plot_expression():
+    """
+    Plot a mathematical function using SymPy and Matplotlib.
+
+    Example:
+        x**2
+        sin(x)
+        cos(x)
+        x**2 + 2*x + 1
+    """
+
+    try:
+        expression = display.get()
+
+        # Convert Marathi digits to English digits.
+        expression = expression.translate(MARATHI_TO_ENGLISH)
+
+        # Convert text into a SymPy expression.
+        x = sympify("x")
+
+        expr = sympify(expression)
+
+        # Create a numerical function from the SymPy expression.
+        function = lambdify(x, expr, "numpy")
+
+        # Generate x values.
+        x_values = np.linspace(-10, 10, 400)
+
+        # Calculate y values.
+        y_values = function(x_values)
+
+        # Create graph.
+        plt.figure(figsize=(7, 5))
+
+        plt.plot(x_values, y_values, label=f"y = {expr}")
+
+        plt.axhline(0, linewidth=0.8)
+
+        plt.axvline(0, linewidth=0.8)
+
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.title(f"Graph of y = {expr}")
+
+        plt.grid(True)
+        plt.legend()
+
+        plt.show()
+
+    except Exception:
+
+        display.delete(0, tk.END)
+        display.insert(0, LANGUAGES[current_language]["invalid"])
+
+
+# ============================================================
+# BASIC BUTTON FRAME
 # ============================================================
 
 button_frame = tk.Frame(root)
 
-button_frame.pack(expand=True, fill="both", padx=10, pady=10)
+button_frame.pack(fill="both", padx=10, pady=5)
 
 
 # ============================================================
@@ -185,23 +291,150 @@ for text, row, column in buttons:
 
 
 # ============================================================
-# CLEAR BUTTON
+# SCIENTIFIC BUTTON FRAME
 # ============================================================
 
-clear_button = tk.Button(button_frame, text="Clear", font=("Arial", 14), command=clear)
+scientific_frame = tk.Frame(root)
 
-clear_button.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=3, pady=3)
+scientific_frame.pack(fill="both", padx=10, pady=5)
+
+
+scientific_buttons = [
+    ("√", "sqrt(", 0, 0),
+    ("x²", "**2", 0, 1),
+    ("sin", "sin(", 0, 2),
+    ("cos", "cos(", 0, 3),
+    ("tan", "tan(", 1, 0),
+    ("log", "log(", 1, 1),
+    ("(", "(", 1, 2),
+    (")", ")", 1, 3),
+]
+
+
+for text, value, row, column in scientific_buttons:
+
+    button = tk.Button(
+        scientific_frame,
+        text=text,
+        font=("Arial", 13),
+        command=lambda value=value: click(value),
+    )
+
+    button.grid(row=row, column=column, sticky="nsew", padx=3, pady=3)
 
 
 # ============================================================
-# BACKSPACE BUTTON
+# SIMPLIFY BUTTON
 # ============================================================
 
-backspace_button = tk.Button(
-    button_frame, text="Backspace", font=("Arial", 14), command=backspace
+simplify_button = tk.Button(
+    root, text="Simplify", font=("Arial", 13), command=simplify_expression
 )
 
-backspace_button.grid(row=4, column=2, columnspan=2, sticky="nsew", padx=3, pady=3)
+simplify_button.pack(fill="x", padx=10, pady=5)
+
+
+# ============================================================
+# PLOT BUTTON
+# ============================================================
+
+plot_button = tk.Button(root, text="Plot", font=("Arial", 13), command=plot_expression)
+
+plot_button.pack(fill="x", padx=10, pady=5)
+
+
+# ============================================================
+# CLEAR / BACKSPACE BUTTONS
+# ============================================================
+
+clear_button = tk.Button(root, text="Clear", font=("Arial", 14), command=clear)
+
+clear_button.pack(side="left", expand=True, fill="x", padx=(10, 3), pady=5)
+
+
+backspace_button = tk.Button(
+    root, text="Backspace", font=("Arial", 14), command=backspace
+)
+
+backspace_button.pack(side="left", expand=True, fill="x", padx=(3, 10), pady=5)
+
+
+# ============================================================
+# UNIT CONVERTER
+# ============================================================
+
+unit_frame = tk.LabelFrame(
+    root, text="Unit Converter", font=("Arial", 12), padx=8, pady=8
+)
+
+unit_frame.pack(fill="x", padx=10, pady=10)
+
+
+unit_value = tk.Entry(unit_frame, font=("Arial", 13))
+
+unit_value.grid(row=0, column=0, columnspan=3, sticky="ew", padx=3, pady=3)
+
+unit_value.insert(0, "100")
+
+
+unit_from = tk.Entry(unit_frame, font=("Arial", 13))
+
+unit_from.grid(row=1, column=0, sticky="ew", padx=3, pady=3)
+
+unit_from.insert(0, "cm")
+
+
+unit_arrow = tk.Label(unit_frame, text="→", font=("Arial", 14))
+
+unit_arrow.grid(row=1, column=1, padx=3, pady=3)
+
+
+unit_to = tk.Entry(unit_frame, font=("Arial", 13))
+
+unit_to.grid(row=1, column=2, sticky="ew", padx=3, pady=3)
+
+unit_to.insert(0, "m")
+
+
+unit_result = tk.Label(
+    unit_frame, text="Result: 1 meter", font=("Arial", 13), anchor="w"
+)
+
+unit_result.grid(row=2, column=0, columnspan=3, sticky="ew", padx=3, pady=5)
+
+
+def convert_units():
+    """
+    Convert a physical quantity using Pint.
+    """
+
+    try:
+        value = unit_value.get().strip()
+        from_unit = unit_from.get().strip()
+        to_unit = unit_to.get().strip()
+
+        quantity = float(value) * ureg(from_unit)
+
+        converted = quantity.to(to_unit)
+
+        result = f"{converted.magnitude:g} {converted.units}"
+
+        unit_result.config(text=f"Result: {result}")
+
+    except Exception:
+
+        unit_result.config(text=LANGUAGES[current_language]["unit_invalid"])
+
+
+convert_button = tk.Button(
+    unit_frame, text="Convert", font=("Arial", 13), command=convert_units
+)
+
+convert_button.grid(row=3, column=0, columnspan=3, sticky="ew", padx=3, pady=3)
+
+
+for column in range(3):
+    unit_frame.columnconfigure(column, weight=1)
 
 
 # ============================================================
@@ -210,7 +443,7 @@ backspace_button.grid(row=4, column=2, columnspan=2, sticky="nsew", padx=3, pady
 
 translate_button = tk.Button(root, text="मराठी", font=("Arial", 14))
 
-translate_button.pack(fill="x", padx=10, pady=(0, 10))
+translate_button.pack(fill="x", padx=10, pady=5)
 
 
 # ============================================================
@@ -222,27 +455,30 @@ def translate_interface():
 
     global current_language
 
-    # Switch language
     if current_language == "English":
         current_language = "Marathi"
+
     else:
         current_language = "English"
 
     language = LANGUAGES[current_language]
 
-    # Change window title
     root.title(language["title"])
 
-    # Change Clear button
     clear_button.config(text=language["clear"])
 
-    # Change Backspace button
     backspace_button.config(text=language["backspace"])
 
-    # Change Translate button
+    simplify_button.config(text=language["simplify"])
+
+    plot_button.config(text=language["plot"])
+
+    convert_button.config(text=language["convert"])
+
+    unit_frame.config(text=language["unit_converter"])
+
     translate_button.config(text=language["translate"])
 
-    # Convert numbers already displayed
     current_display = display.get()
 
     if current_language == "Marathi":
@@ -256,17 +492,17 @@ def translate_interface():
     display.delete(0, tk.END)
     display.insert(0, current_display)
 
-    # Change number button labels
+    # Change number button labels.
     for button, value in number_buttons:
 
-        if current_language == "Marathi":
+        if value.isdigit():
 
-            if value.isdigit():
+            if current_language == "Marathi":
+
                 button.config(text=value.translate(ENGLISH_TO_MARATHI))
 
-        else:
+            else:
 
-            if value.isdigit():
                 button.config(text=value)
 
 
@@ -274,14 +510,20 @@ translate_button.config(command=translate_interface)
 
 
 # ============================================================
-# RESIZE BUTTON GRID
+# RESIZE BUTTON GRIDS
 # ============================================================
 
-for row in range(5):
+for row in range(4):
     button_frame.rowconfigure(row, weight=1)
 
 for column in range(4):
     button_frame.columnconfigure(column, weight=1)
+
+for row in range(2):
+    scientific_frame.rowconfigure(row, weight=1)
+
+for column in range(4):
+    scientific_frame.columnconfigure(column, weight=1)
 
 
 # ============================================================
